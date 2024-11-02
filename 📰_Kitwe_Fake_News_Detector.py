@@ -2,14 +2,18 @@ import torch
 from transformers import AutoTokenizer
 from torch.nn.functional import softmax
 import streamlit as st
+from huggingface_hub import hf_hub_download
 
 st.set_page_config(
     page_title="Kitwe Fake News Detector",
     page_icon="📰",
 )
 
+# Download the model from Hugging Face if not already downloaded
+model_path = hf_hub_download(repo_id="hoybrett99/KitweFakeNewsDetector-BERT", filename="quantized_final_bert_model_complete.pth")
+
 # Load the model and tokenizer
-loaded_model = torch.load("C:\\Users\\hoybr\\sessionworkspace\\Kitwe\\quantized_final_bert_model_complete.pth")
+loaded_model = torch.load(model_path)
 loaded_model.eval()
 tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
