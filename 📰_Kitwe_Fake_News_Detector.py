@@ -35,9 +35,6 @@ BUCKET_NAME = os.getenv('BUCKET')
 OBJECT_KEY = os.getenv('OBJECT_KEY')
 PROJECT_ID = os.getenv('PROJECT_ID')
 
-# Set Google Application Credentials
-google_creds_json = os.getenv("CREDS")
-
 # Function to download the data from Google Cloud Storage
 def download_data_from_gcs(bucket_name, object_key, project_id=PROJECT_ID):
     client = storage.Client(project=project_id)
