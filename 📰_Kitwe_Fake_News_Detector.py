@@ -32,7 +32,7 @@ st.set_page_config(
 
 # Google Cloud Storage Configuration
 BUCKET_NAME = os.getenv('BUCKET')
-OBJECT_KEY = os.getenv('OBJECT_KEY')
+OBJECT_KEY = os.getenv('OBJECT_KEY_PARQUET')
 PROJECT_ID = os.getenv('PROJECT_ID')
 
 # Function to download the data from Google Cloud Storage
