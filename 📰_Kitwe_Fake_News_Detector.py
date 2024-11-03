@@ -1,12 +1,13 @@
 import pandas as pd
 import streamlit as st
 from google.cloud import storage
-from io import BytesIO  # For handling binary data like Parquet files
+from io import BytesIO
 import os
 import torch
 from transformers import AutoTokenizer
 from torch.nn.functional import softmax
 from huggingface_hub import hf_hub_download
+import pyarrow.parquet as pq  # Import PyArrow for optimized Parquet handling
 
 # Streamlit page configuration
 st.set_page_config(
@@ -25,9 +26,10 @@ def download_data_from_gcs(bucket_name, object_key, project_id=PROJECT_ID):
     client = storage.Client(project=project_id)
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(object_key)
-    data_bytes = blob.download_as_bytes()
-    data = pd.read_parquet(BytesIO(data_bytes))
-    return data
+    data_bytes = blob.download_as_bytes()  # Download as binary for Parquet
+    table = pq.read_table(BytesIO(data_bytes))  # Read as PyArrow table for performance
+    df = table.to_pandas()  # Convert to DataFrame only if needed
+    return df
 
 # Load BERT model for predictions
 @st.cache_resource
