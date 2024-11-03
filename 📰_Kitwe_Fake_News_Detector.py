@@ -31,9 +31,9 @@ st.set_page_config(
 )
 
 # Google Cloud Storage Configuration
-BUCKET_NAME = Bucket
-OBJECT_KEY = Object_key
-PROJECT_ID = Project_id
+BUCKET_NAME = os.getenv('BUCKET')
+OBJECT_KEY = os.getenv('OBJECT_KEY')
+PROJECT_ID = os.getenv('PROJECT_ID')
 
 # Set Google Application Credentials
 
