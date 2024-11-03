@@ -1,7 +1,6 @@
 import pandas as pd
 import streamlit as st
 from google.cloud import storage
-from io import BytesIO  # For handling binary data like Parquet files
 import os
 import torch
 from transformers import AutoTokenizer
@@ -9,6 +8,7 @@ from torch.nn.functional import softmax
 from huggingface_hub import hf_hub_download
 import spacy
 from datetime import datetime, timedelta
+import pyarrow.parquet as pq
 
 # Define keywords for each category
 categories_keywords = {
@@ -31,19 +31,20 @@ st.set_page_config(
 )
 
 # Google Cloud Storage Configuration
-BUCKET_NAME = os.getenv('BUCKET')
-OBJECT_KEY = os.getenv('OBJECT_KEY_PARQUET')
-PROJECT_ID = os.getenv('PROJECT_ID')
+BUCKET_NAME = 'kitwe-news-bucket'
+OBJECT_KEY = 'data/kitwe_news_data.parquet'
+PROJECT_ID = 'kitwe-news-feed'
 
-# Function to download the data from Google Cloud Storage
+# Function to load data directly using `pyarrow` from GCS
 @st.cache_data
-def download_data_from_gcs(bucket_name, object_key, project_id=PROJECT_ID):
+def load_data_from_gcs_parquet(bucket_name, object_key, project_id=PROJECT_ID):
     client = storage.Client(project=project_id)
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(object_key)
-    data_bytes = blob.download_as_bytes()  # Download as binary for Parquet
-    data = pd.read_parquet(BytesIO(data_bytes))  # Read the Parquet data
-    return data
+    # Read Parquet file directly as a pyarrow table
+    with blob.open("rb") as f:
+        table = pq.read_table(f)
+    return table.to_pandas()
 
 # Load spaCy model and BERT model
 @st.cache_resource
@@ -89,7 +90,8 @@ def predict_news(text):
 
 # Load and process the data
 try:
-    df = download_data_from_gcs(BUCKET_NAME, OBJECT_KEY)
+    # Load data directly from GCS Parquet file
+    df = load_data_from_gcs_parquet(BUCKET_NAME, OBJECT_KEY)
 
     # Getting today's date
     today = datetime.today()
@@ -98,7 +100,7 @@ try:
     one_week_ago = today - timedelta(days=28)
 
     # Ensure the date format is consistent and filter for recent news
-    df['Date'] = pd.to_datetime(df['Date'], format='%d/%m/%Y', errors='coerce')
+    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df = df[(df['Date'] >= one_week_ago) & (df['Date'] <= today)]
     df['Date'] = df['Date'].dt.strftime('%d/%m/%Y')
 
