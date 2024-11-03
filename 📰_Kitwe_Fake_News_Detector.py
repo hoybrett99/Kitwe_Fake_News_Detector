@@ -19,7 +19,7 @@ categories_keywords = {
     'development': ['development', 'infrastructure', 'construction', 'road', 'bridge', 'building', 'urbanization'],
     'narcotics': ['narcotics', 'drug', 'cocaine', 'heroin', 'meth', 'drug trafficking', 'illegal drugs'],
     'fashion': ['fashion', 'clothing', 'designer', 'runway', 'model', 'style', 'apparel', 'trends'],
-    'local news': ['local', 'community', 'city', 'town', 'village', 'municipality', 'neighborhood', 'region', ],
+    'local news': ['local', 'community', 'city', 'town', 'village', 'municipality', 'neighborhood', 'region'],
     'economy news': ['economy', 'economic', 'finance', 'market', 'stocks', 'currency', 'inflation', 'gdp'],
     'business news': ['business', 'company', 'corporation', 'entrepreneur', 'startup', 'industry', 'investment', 'profit']
 }
@@ -36,6 +36,7 @@ OBJECT_KEY = os.getenv('OBJECT_KEY')
 PROJECT_ID = os.getenv('PROJECT_ID')
 
 # Function to download the data from Google Cloud Storage
+@st.cache_data
 def download_data_from_gcs(bucket_name, object_key, project_id=PROJECT_ID):
     client = storage.Client(project=project_id)
     bucket = client.bucket(bucket_name)
@@ -44,16 +45,29 @@ def download_data_from_gcs(bucket_name, object_key, project_id=PROJECT_ID):
     data = pd.read_csv(StringIO(data_str))
     return data
 
-# Load spaCy model
-nlp = spacy.load("en_core_web_sm")
+# Load spaCy model and BERT model
+@st.cache_resource
+def load_spacy_model():
+    return spacy.load("en_core_web_sm")
+
+@st.cache_resource
+def load_bert_model():
+    model_path = hf_hub_download(repo_id="hoybrett99/KitweFakeNewsDetector-BERT", filename="quantized_final_bert_model_complete.pth")
+    model = torch.load(model_path)
+    model.eval()
+    tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+    return model, tokenizer
+
+nlp = load_spacy_model()
+loaded_model, tokenizer = load_bert_model()
 
 # Text preprocessing function
-def preprocess_text(text):
-    if not text:
-        return ""
-    doc = nlp(text.lower())
-    filtered_text = [token.lemma_ for token in doc if not token.is_punct and not token.is_stop]
-    return " ".join(filtered_text).strip()
+def preprocess_texts(texts):
+    processed_texts = []
+    for doc in nlp.pipe(texts, batch_size=50):
+        filtered_text = [token.lemma_ for token in doc if not token.is_punct and not token.is_stop]
+        processed_texts.append(" ".join(filtered_text).strip())
+    return processed_texts
 
 # Categorization function based on keywords
 def categorize_description(description):
@@ -62,14 +76,6 @@ def categorize_description(description):
         if any(keyword in description.lower() for keyword in keywords):
             categories.append(category)
     return ', '.join(categories) if categories else 'uncategorized'
-
-# Download the model from Hugging Face if not already downloaded
-model_path = hf_hub_download(repo_id="hoybrett99/KitweFakeNewsDetector-BERT", filename="quantized_final_bert_model_complete.pth")
-
-# Load the model and tokenizer
-loaded_model = torch.load(model_path)
-loaded_model.eval()
-tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
 # Define the prediction function
 def predict_news(text):
@@ -88,21 +94,17 @@ try:
     # Getting today's date
     today = datetime.today()
 
-    # Calculate the date one week ago
+    # Calculate the date four weeks ago
     one_week_ago = today - timedelta(days=28)
 
+    # Ensure the date format is consistent and filter for recent news
     df['Date'] = pd.to_datetime(df['Date'], format='%d/%m/%Y', errors='coerce')
-
-
-    # Filter the DataFrame to include only news from today until one week ago
     df = df[(df['Date'] >= one_week_ago) & (df['Date'] <= today)]
-    # Ensure Date is in the desired format
     df['Date'] = df['Date'].dt.strftime('%d/%m/%Y')
-
 
     # Create combined_text and processed_description columns
     df['combined_text'] = df['Headline'].fillna('') + ' ' + df['Description'].fillna('')
-    df['processed_description'] = df['combined_text'].apply(preprocess_text)
+    df['processed_description'] = preprocess_texts(df['combined_text'])
     df['Category'] = df['Category'].apply(categorize_description)
 
     # Apply prediction model to generate 'prediction' and 'confidence' columns
@@ -118,12 +120,12 @@ try:
     # Filter the DataFrame by the selected categories
     filtered_df = df[df['Category'].isin(selected_categories)]
 
-    # Iterate through each news item in the filtered DataFrame and display it in the specified format
+    # Display the news in a formatted way
     for _, row in filtered_df.iterrows():
         # Display the headline as a clickable hyperlink
         st.markdown(f"### [{row['Headline']}]({row['Link']})")
 
-        # Display Source and Category
+        # Display Source, Category, and Date
         st.markdown(f"**Source**: {row['Source']}  |  **Category**: {row['Category']} | {row['Date']}")
 
         # Display the main description paragraph
