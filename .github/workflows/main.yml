@@ -1,0 +1,61 @@
+name: Update Parquet File from GCS
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Runs daily at midnight UTC
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  update-parquet:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+
+      - name: Install dependencies
+        run: |
+          pip install google-cloud-storage pandas pyarrow
+
+      - name: Authenticate to Google Cloud
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/gcp-key.json
+        run: |
+          echo "${{ secrets.GCP_CREDENTIALS }}" > $GOOGLE_APPLICATION_CREDENTIALS
+
+      - name: Download Parquet file from GCS
+        env:
+          BUCKET_NAME: "kitwe-news-bucket"  # Replace with your GCS bucket name
+          OBJECT_KEY: "data/kitwe_news_data.parquet"  # Replace with your object key path in the bucket
+        run: |
+          python - <<EOF
+          from google.cloud import storage
+          import pandas as pd
+
+          # Initialize Google Cloud Storage client
+          client = storage.Client()
+          bucket = client.bucket("${BUCKET_NAME}")
+          blob = bucket.blob("${OBJECT_KEY}")
+
+          # Download Parquet file
+          data_bytes = blob.download_as_bytes()
+
+          # Save to data directory in repository
+          with open("data/kitwe_news_data.parquet", "wb") as file:
+              file.write(data_bytes)
+          EOF
+
+      - name: Commit and push updated Parquet file
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add data/kitwe_news_data.parquet
+          git commit -m 'Update Parquet file from GCS with latest news data'
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
