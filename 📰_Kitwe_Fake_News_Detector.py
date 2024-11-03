@@ -146,8 +146,8 @@ except Exception as e:
     st.error(f"Failed to load or process data: {e}")
 
 
-        # Add a horizontal divider between news items
-        st.markdown("---")
+    # Add a horizontal divider between news items
+    st.markdown("---")
 
 except Exception as e:
     st.error(f"Failed to load or process data: {e}")
