@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 from google.cloud import storage
-from io import StringIO
+from io import BytesIO  # For handling binary data like Parquet files
 import os
 import torch
 from transformers import AutoTokenizer
@@ -41,8 +41,8 @@ def download_data_from_gcs(bucket_name, object_key, project_id=PROJECT_ID):
     client = storage.Client(project=project_id)
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(object_key)
-    data_str = blob.download_as_text()
-    data = pd.read_csv(StringIO(data_str))
+    data_bytes = blob.download_as_bytes()  # Download as binary for Parquet
+    data = pd.read_parquet(BytesIO(data_bytes))  # Read the Parquet data
     return data
 
 # Load spaCy model and BERT model
@@ -138,6 +138,13 @@ try:
             f"({row['confidence']:.2f}%)",
             unsafe_allow_html=True
         )
+
+        # Add a horizontal divider between news items
+        st.markdown("---")
+
+except Exception as e:
+    st.error(f"Failed to load or process data: {e}")
+
 
         # Add a horizontal divider between news items
         st.markdown("---")
