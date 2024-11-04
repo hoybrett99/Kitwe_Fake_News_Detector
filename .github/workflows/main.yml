@@ -1,7 +1,9 @@
-name: Update Parquet File in GCS
+name: Update Parquet File in Google Cloud Storage
 
 on:
-  workflow_dispatch:  # Allows manual triggering of the workflow
+  workflow_dispatch:  # Allows manual triggering
+  schedule:
+    - cron: '0 0 * * *'  # Runs daily at midnight
 
 jobs:
   update_parquet_file:
@@ -14,23 +16,23 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.8'  # Use the version compatible with your environment
+          python-version: '3.8'  # Use the desired Python version
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install google-cloud-storage pandas pyarrow  # Install any other required libraries
+          pip install google-cloud-storage pandas pyarrow  # Required libraries
 
       - name: Configure Google Cloud credentials
-        # Use the GCP_CREDENTIALS secret to create a JSON key file
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: "${{ runner.temp }}/gcp-key.json"
+          GOOGLE_APPLICATION_CREDENTIALS: "${{ runner.temp }}/gcp-key.json"  # Define path for temporary JSON key
         run: |
+          # Save the GCP credentials JSON from the GitHub secret into the temporary file
           echo "${{ secrets.GCP_CREDENTIALS }}" > $GOOGLE_APPLICATION_CREDENTIALS
 
       - name: Run Python script to update Parquet file in GCS
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: "${{ runner.temp }}/gcp-key.json"  # Ensure the environment variable is set
+          GOOGLE_APPLICATION_CREDENTIALS: "${{ runner.temp }}/gcp-key.json"  # Set the environment variable for Google Auth
         run: |
           python - <<EOF
           import os
@@ -53,8 +55,8 @@ jobs:
           parquet_data = blob.download_as_bytes()
           df = pd.read_parquet(BytesIO(parquet_data))
 
-          # Perform any updates on the DataFrame
-          # Example: df['new_column'] = 'example_value'  # Modify the DataFrame as needed
+          # Perform any updates on the DataFrame (example)
+          # df['new_column'] = 'example_value'
 
           # Save updated DataFrame to Parquet and upload back to GCS
           output_buffer = BytesIO()
