@@ -25,14 +25,16 @@ jobs:
 
       - name: Configure Google Cloud credentials
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: "${{ runner.temp }}/gcp-key.json"  # Define path for temporary JSON key
+          GOOGLE_APPLICATION_CREDENTIALS: "${{ runner.temp }}/gcp-key.json"
         run: |
-          # Save the GCP credentials JSON from the GitHub secret into the temporary file
           echo "${{ secrets.GCP_CREDENTIALS }}" > $GOOGLE_APPLICATION_CREDENTIALS
 
       - name: Run Python script to update Parquet file in GCS
         env:
           GOOGLE_APPLICATION_CREDENTIALS: "${{ runner.temp }}/gcp-key.json"  # Set the environment variable for Google Auth
+          BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
+          OBJECT_KEY: ${{ secrets.GCP_OBJECT_KEY }}
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         run: |
           python - <<EOF
           import os
@@ -42,14 +44,15 @@ jobs:
           import pyarrow.parquet as pq
           from io import BytesIO
 
-          # Google Cloud Storage configuration
-          BUCKET_NAME = 'kitwe-news-bucket'
-          OBJECT_KEY = 'data/kitwe_news_data.parquet'
+          # Google Cloud Storage configuration from environment variables
+          bucket_name = os.getenv("BUCKET_NAME")
+          object_key = os.getenv("OBJECT_KEY")
+          project_id = os.getenv("PROJECT_ID")
 
           # Initialize Google Cloud Storage client
-          client = storage.Client()
-          bucket = client.bucket(BUCKET_NAME)
-          blob = bucket.blob(OBJECT_KEY)
+          client = storage.Client(project=project_id)
+          bucket = client.bucket(bucket_name)
+          blob = bucket.blob(object_key)
 
           # Download the Parquet file
           parquet_data = blob.download_as_bytes()
@@ -63,5 +66,5 @@ jobs:
           df.to_parquet(output_buffer, index=False)
           output_buffer.seek(0)
           blob.upload_from_file(output_buffer, content_type='application/octet-stream')
-          print(f"Parquet file updated and uploaded to {OBJECT_KEY} in {BUCKET_NAME} bucket.")
+          print(f"Parquet file updated and uploaded to {object_key} in {bucket_name} bucket.")
           EOF
