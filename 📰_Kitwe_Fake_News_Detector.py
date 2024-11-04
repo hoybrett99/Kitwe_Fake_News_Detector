@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
-from google.cloud import bigquery
+from google.cloud import storage
+from io import BytesIO  # For handling binary data like Parquet files
 import os
 import torch
 from transformers import AutoTokenizer
@@ -13,16 +14,19 @@ st.set_page_config(
     page_icon="📰",
 )
 
-# Google Cloud Configuration
+# Google Cloud Storage Configuration
+BUCKET_NAME = 'kitwe-news-bucket'
+OBJECT_KEY = 'data/kitwe_news_data.parquet'
 PROJECT_ID = 'kitwe-news-feed'
-TABLE_ID = 'kitwe-news-feed.Kitwe_news_updates.kitwe_table'
 
-# Function to query data from BigQuery
+# Function to download the data from Google Cloud Storage
 @st.cache_data
-def load_data_from_bigquery(project_id=PROJECT_ID, table_id=TABLE_ID):
-    client = bigquery.Client(project=project_id)
-    query = f"SELECT * FROM `{table_id}`"
-    data = client.query(query).to_dataframe()
+def download_data_from_gcs(bucket_name, object_key, project_id=PROJECT_ID):
+    client = storage.Client(project=project_id)
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(object_key)
+    data_bytes = blob.download_as_bytes()
+    data = pd.read_parquet(BytesIO(data_bytes))
     return data
 
 # Load BERT model for predictions
@@ -48,7 +52,7 @@ def predict_news(text):
 
 # Load and process the data
 try:
-    df = load_data_from_bigquery()
+    df = download_data_from_gcs(BUCKET_NAME, OBJECT_KEY)
 
     # Apply prediction model on the processed descriptions
     df[['prediction', 'confidence']] = df['processed_description'].apply(lambda x: pd.Series(predict_news(x)))
