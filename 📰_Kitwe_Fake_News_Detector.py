@@ -1,13 +1,11 @@
 import pandas as pd
 import streamlit as st
-from google.cloud import storage
-from io import BytesIO
+from google.cloud import bigquery
 import os
 import torch
 from transformers import AutoTokenizer
 from torch.nn.functional import softmax
 from huggingface_hub import hf_hub_download
-import pyarrow.parquet as pq  # Import PyArrow for optimized Parquet handling
 
 # Streamlit page configuration
 st.set_page_config(
@@ -15,21 +13,17 @@ st.set_page_config(
     page_icon="📰",
 )
 
-# Google Cloud Storage Configuration
-BUCKET_NAME = os.getenv("BUCKET")
-OBJECT_KEY = os.getenv("OBJECT_KEY_PARQUET")
-PROJECT_ID = os.getenv("PROJECT_ID")
+# Google Cloud Configuration
+PROJECT_ID = 'kitwe-news-feed'
+TABLE_ID = 'kitwe-news-feed.Kitwe_news_updates.kitwe_table'
 
-# Function to download the data from Google Cloud Storage
+# Function to query data from BigQuery
 @st.cache_data
-def download_data_from_gcs(bucket_name, object_key, project_id=PROJECT_ID):
-    client = storage.Client(project=project_id)
-    bucket = client.bucket(bucket_name)
-    blob = bucket.blob(object_key)
-    data_bytes = blob.download_as_bytes()  # Download as binary for Parquet
-    table = pq.read_table(BytesIO(data_bytes))  # Read as PyArrow table for performance
-    df = table.to_pandas()  # Convert to DataFrame only if needed
-    return df
+def load_data_from_bigquery(project_id=PROJECT_ID, table_id=TABLE_ID):
+    client = bigquery.Client(project=project_id)
+    query = f"SELECT * FROM `{table_id}`"
+    data = client.query(query).to_dataframe()
+    return data
 
 # Load BERT model for predictions
 @st.cache_resource
@@ -54,7 +48,7 @@ def predict_news(text):
 
 # Load and process the data
 try:
-    df = download_data_from_gcs(BUCKET_NAME, OBJECT_KEY)
+    df = load_data_from_bigquery()
 
     # Apply prediction model on the processed descriptions
     df[['prediction', 'confidence']] = df['processed_description'].apply(lambda x: pd.Series(predict_news(x)))
