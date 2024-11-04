@@ -1,12 +1,12 @@
-name: Update Parquet File in Google Cloud Storage
+name: Fetch Data from GCS and Update GitHub Repository
 
 on:
-  workflow_dispatch:  # Allows manual triggering
   schedule:
     - cron: '0 0 * * *'  # Runs daily at midnight
+  workflow_dispatch:  # Allows manual triggering
 
 jobs:
-  update_parquet_file:
+  update_repo_with_gcs_data:
     runs-on: ubuntu-latest
 
     steps:
@@ -16,12 +16,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.8'  # Use the desired Python version
+          python-version: '3.8'
 
-      - name: Install dependencies
+      - name: Install Google Cloud Storage library
         run: |
           python -m pip install --upgrade pip
-          pip install google-cloud-storage pandas pyarrow  # Required libraries
+          pip install google-cloud-storage
 
       - name: Configure Google Cloud credentials
         env:
@@ -29,61 +29,36 @@ jobs:
         run: |
           echo "${{ secrets.GCP_CREDENTIALS }}" > $GOOGLE_APPLICATION_CREDENTIALS
 
-      - name: Test Google Cloud authentication
+      - name: Download data from GCS
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: "${{ runner.temp }}/gcp-key.json"  # Set the environment variable for Google Auth
-          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-        run: |
-          python - <<EOF
-          from google.cloud import storage
-          import os
-
-          project_id = os.getenv("PROJECT_ID")
-          client = storage.Client(project=project_id)
-          buckets = list(client.list_buckets())
-          if buckets:
-              print(f"Authentication successful. Found {len(buckets)} buckets.")
-          else:
-              print("Authentication successful, but no buckets found.")
-          EOF
-
-      - name: Run Python script to update Parquet file in GCS
-        if: success()  # Only run if authentication test succeeds
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: "${{ runner.temp }}/gcp-key.json"  # Set the environment variable for Google Auth
+          GOOGLE_APPLICATION_CREDENTIALS: "${{ runner.temp }}/gcp-key.json"
           BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
           OBJECT_KEY: ${{ secrets.GCP_OBJECT_KEY }}
-          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         run: |
           python - <<EOF
           import os
           from google.cloud import storage
-          import pandas as pd
-          import pyarrow as pa
-          import pyarrow.parquet as pq
-          from io import BytesIO
-
-          # Google Cloud Storage configuration from environment variables
-          bucket_name = os.getenv("BUCKET_NAME")
-          object_key = os.getenv("OBJECT_KEY")
-          project_id = os.getenv("PROJECT_ID")
 
           # Initialize Google Cloud Storage client
-          client = storage.Client(project=project_id)
-          bucket = client.bucket(bucket_name)
-          blob = bucket.blob(object_key)
+          client = storage.Client()
+          bucket = client.bucket(os.getenv("BUCKET_NAME"))
+          blob = bucket.blob(os.getenv("OBJECT_KEY"))
 
-          # Download the Parquet file
-          parquet_data = blob.download_as_bytes()
-          df = pd.read_parquet(BytesIO(parquet_data))
-
-          # Perform any updates on the DataFrame (example)
-          # df['new_column'] = 'example_value'
-
-          # Save updated DataFrame to Parquet and upload back to GCS
-          output_buffer = BytesIO()
-          df.to_parquet(output_buffer, index=False)
-          output_buffer.seek(0)
-          blob.upload_from_file(output_buffer, content_type='application/octet-stream')
-          print(f"Parquet file updated and uploaded to {object_key} in {bucket_name} bucket.")
+          # Download the file
+          file_name = os.path.basename(os.getenv("OBJECT_KEY"))
+          blob.download_to_filename(file_name)
+          print(f"Downloaded {file_name} from GCS.")
           EOF
+
+      - name: Commit and push changes to repository
+        env:
+          FILE_NAME: ${{ secrets.GCP_OBJECT_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Add the downloaded file to the repository
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          mv $(basename $FILE_NAME) path/in/repo/$(basename $FILE_NAME)  # Adjust path as needed
+          git add path/in/repo/$(basename $FILE_NAME)
+          git commit -m "Update data file from GCS"
+          git push
