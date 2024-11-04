@@ -1,12 +1,13 @@
-name: Fetch Data from GCS and Update GitHub Repository
+name: Upload Files to GCS
 
 on:
-  schedule:
-    - cron: '0 0 * * *'  # Runs daily at midnight
+  push:
+    branches:
+      - main  # Trigger on push to the main branch
   workflow_dispatch:  # Allows manual triggering
 
 jobs:
-  update_repo_with_gcs_data:
+  upload_to_gcs:
     runs-on: ubuntu-latest
 
     steps:
@@ -29,11 +30,10 @@ jobs:
         run: |
           echo "${{ secrets.GCP_CREDENTIALS }}" > $GOOGLE_APPLICATION_CREDENTIALS
 
-      - name: Download data from GCS
+      - name: Upload files to GCS
         env:
           GOOGLE_APPLICATION_CREDENTIALS: "${{ runner.temp }}/gcp-key.json"
           BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
-          OBJECT_KEY: ${{ secrets.GCP_OBJECT_KEY }}
         run: |
           python - <<EOF
           import os
@@ -41,24 +41,18 @@ jobs:
 
           # Initialize Google Cloud Storage client
           client = storage.Client()
-          bucket = client.bucket(os.getenv("BUCKET_NAME"))
-          blob = bucket.blob(os.getenv("OBJECT_KEY"))
+          bucket_name = os.getenv("BUCKET_NAME")
+          bucket = client.bucket(bucket_name)
 
-          # Download the file
-          file_name = os.path.basename(os.getenv("OBJECT_KEY"))
-          blob.download_to_filename(file_name)
-          print(f"Downloaded {file_name} from GCS.")
+          # List of files to upload
+          files_to_upload = [
+              "path/to/your-file-1.parquet",
+              "path/to/your-file-2.csv"  # Add more files as needed
+          ]
+
+          # Upload each file
+          for file_path in files_to_upload:
+              blob = bucket.blob(file_path)
+              blob.upload_from_filename(file_path)
+              print(f"Uploaded {file_path} to gs://{bucket_name}/{file_path}")
           EOF
-
-      - name: Commit and push changes to repository
-        env:
-          FILE_NAME: ${{ secrets.GCP_OBJECT_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Add the downloaded file to the repository
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          mv $(basename $FILE_NAME) path/in/repo/$(basename $FILE_NAME)  # Adjust path as needed
-          git add path/in/repo/$(basename $FILE_NAME)
-          git commit -m "Update data file from GCS"
-          git push
