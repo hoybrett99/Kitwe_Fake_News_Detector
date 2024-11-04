@@ -29,7 +29,26 @@ jobs:
         run: |
           echo "${{ secrets.GCP_CREDENTIALS }}" > $GOOGLE_APPLICATION_CREDENTIALS
 
+      - name: Test Google Cloud authentication
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: "${{ runner.temp }}/gcp-key.json"  # Set the environment variable for Google Auth
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          python - <<EOF
+          from google.cloud import storage
+          import os
+
+          project_id = os.getenv("PROJECT_ID")
+          client = storage.Client(project=project_id)
+          buckets = list(client.list_buckets())
+          if buckets:
+              print(f"Authentication successful. Found {len(buckets)} buckets.")
+          else:
+              print("Authentication successful, but no buckets found.")
+          EOF
+
       - name: Run Python script to update Parquet file in GCS
+        if: success()  # Only run if authentication test succeeds
         env:
           GOOGLE_APPLICATION_CREDENTIALS: "${{ runner.temp }}/gcp-key.json"  # Set the environment variable for Google Auth
           BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
