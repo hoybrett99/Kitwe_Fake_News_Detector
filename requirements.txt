@@ -3,4 +3,4 @@ transformers>=4.45.1
 streamlit>=1.39.0
 huggingface_hub>=0.25.1
 pandas==2.2.2
-google-cloud-storage==2.18.2
+google-cloud-big-query==3.26.0
