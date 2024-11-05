@@ -71,9 +71,13 @@ def categorize_description(description):
 # Prediction function using Hugging Face pipeline
 def predict_news(text):
     result = text_classifier(text)[0]
-    prediction = result['label']
+    label = result['label']
     confidence = result['score'] * 100  # Confidence in percentage
+
+    # Map LABEL_1 to "real" and LABEL_2 to "fake"
+    prediction = "real" if label == "LABEL_1" else "fake"
     return prediction, confidence
+
 
 # Helper function to check if a date is within the last 28 days
 def is_within_last_28_days(published_date_str):
