@@ -7,6 +7,7 @@ import base64
 from datetime import datetime, timedelta
 import feedparser
 import re
+import requests
 
 # Set page title and layout
 st.set_page_config(page_title="Kitwe News Today", page_icon="📰", layout="wide")
@@ -25,14 +26,20 @@ def load_huggingface_pipeline():
 
 text_classifier = load_huggingface_pipeline()
 
-# Load and encode image for logo
-def load_logo(path):
-    with open(path, "rb") as image_file:
-        encoded_logo = base64.b64encode(image_file.read()).decode()
+# URL of the logo image in the GitHub repository
+logo_url = "https://github.com/hoybrett99/Kitwe_Fake_News_Detector/blob/main/kitwe_logo.png"
+
+# Function to fetch and encode image from GitHub
+def load_logo_from_url(url):
+    response = requests.get(url)
+    response.raise_for_status()  # Check that the request was successful
+    encoded_logo = base64.b64encode(response.content).decode()
     return encoded_logo
 
-logo_path = "D:/Data_engineering/kitwe-news-datapipeline/kitwe_logo.png"
-encoded_logo = load_logo(logo_path)
+# Load and encode the logo image
+encoded_logo = load_logo_from_url(logo_url)
+
+# HTML to display the Base64-encoded logo image
 logo_html = f"""
     <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 20px;">
         <img src="data:image/png;base64,{encoded_logo}" style="width:150px; height:150px; border-radius:50%; object-fit:cover;">
