@@ -10,4 +10,5 @@ streamlit_option_menu==0.4.0
 requests==2.32.3
 scipy==1.14.1
 nltk==3.9.1
+streamlit_lottie==0.0.5
 en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
